@@ -59,7 +59,7 @@ Results are shown in /output/log/model-test-job-light.log
 
 Each folder in /data path is a dataset.
 
-Each table in a dataset shold be saved in a csv file format.
+Each table in a dataset should be saved in a csv file format.
 
 Examples can be found at /data/README.md.
 
