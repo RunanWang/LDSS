@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Project File
+.idea/*
+
+# output
+output/*
+output-new/*
+data/origin-JOB-lite-old
+*.pkl
+*.log
+
+# Data
+/data/dmv/*.csv
+/data/forest/*.csv
+/data/job-light/*.csv
+/data/power/*.csv
+*.tgz
