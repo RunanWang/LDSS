@@ -206,27 +206,27 @@ def get_frac(op, total, part):
         return 0
 
 
-def query_2_histogram_vec(query: Query, database: Database):
+def query_2_histogram_vec(query: Query, histo):
     vec = {}
     for t in query.predicates.keys():
         for col, pred in query.predicates[t].items():
-            for cate in database.data[t].columns[col].bins:
+            for cate in histo[t].col_2_histo_bin[col]:
                 vec[f"qh_{t}_{col}_{list_to_str(cate)}"] = 0
             if pred is None:
                 pass
             else:
                 op, val = pred
                 if op == '[]':
-                    for cate in database.data[t].columns[col].bins:
+                    for cate in histo[t].col_2_histo_bin[col]:
                         vec[f"qh_{t}_{col}_{list_to_str(cate)}"] = get_frac(op, val, cate)
                 elif op == '>=':
-                    for cate in database.data[t].columns[col].bins:
+                    for cate in histo[t].col_2_histo_bin[col]:
                         vec[f"qh_{t}_{col}_{list_to_str(cate)}"] = get_frac(op, val, cate)
                 elif op == '<=':
-                    for cate in database.data[t].columns[col].bins:
+                    for cate in histo[t].col_2_histo_bin[col]:
                         vec[f"qh_{t}_{col}_{list_to_str(cate)}"] = get_frac(op, val, cate)
                 elif op == '=':
-                    for cate in database.data[t].columns[col].bins:
+                    for cate in histo[t].col_2_histo_bin[col]:
                         vec[f"qh_{t}_{col}_{list_to_str(cate)}"] = get_frac(op, val, cate)
     return vec
 

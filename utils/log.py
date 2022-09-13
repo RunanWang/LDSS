@@ -43,13 +43,5 @@ class Log(object):
 
 
 def data_describe_log(df_name: str, df: pd.DataFrame, log: logging.Logger):
-    log.info("Below is data describe of " + df_name)
-    log.info("Count:    " + str(df.count()[0]))
-    log.info("Mean :    " + str(df.mean()[0]))
-    log.info("Std  :    " + str(df.std()[0]))
-    log.info("Min  :    " + str(df.min()[0]))
-    log.info("10%  :    " + str(df.quantile(0.1)[0]))
-    log.info("50%  :    " + str(df.quantile(0.5)[0]))
-    log.info("95%  :    " + str(df.quantile(0.95)[0]))
-    log.info("99%  :    " + str(df.quantile(0.99)[0]))
-    log.info("Max  :    " + str(df.max()[0]))
+    log.info(f"In dataset {df_name}, Count={df.count()[0]:>6d}, Mean={df.mean()[0]:.4f}, 50%={df.quantile(0.5)[0]:.4f}, 90%={df.quantile(0.9)[0]:.4f}, 95%={df.quantile(0.95)[0]:.4f}, 99%={df.quantile(0.99)[0]:.4f}, max={df.max()[0]:.4f}")
+

@@ -36,21 +36,30 @@ WORKLOAD_PARA = {
 }
 
 # sample info
+MAX_SAMPLE_SPACE = 0.2
+STANDARD_SAMPLE_PAR = {"ratio": 0.1, "seed": 6398084, "replace": False}
+SAMPLE_RATIO_DIS = 0.02
+SAMPLE_GROUP_PAR = {
+    "s0.01r": {"ratio": 0.01, "seed": 3242356, "replace": True},
+    "s0.01": {"ratio": 0.01, "seed": 217946543, "replace": False},
+}
+
 SAMPLE_IRR_COL_RATE = 0
 SAMPLE_DIS_COL_RATE = 0.2
 SAMPLE_DIS_NUM = 0
-SAMPLE_HASH_RATE = 0.1
-SAMPLE_HASH_SEED = 5
-SAMPLE_GROUP_PAR = {
-    "s0.1": {"ratio": 0.1, "seed": 78902345, "replace": True},
-    "s0.01": {"ratio": 0.01, "seed": 3242356, "replace": True},
-    "s0.1r": {"ratio": 0.1, "seed": 6398084, "replace": False},
-    "s0.01r": {"ratio": 0.01, "seed": 217946543, "replace": False},
-}
+
+STANDARD_MULTI_SAMPLE_PAR = {"ratio": 0.1, "seed": 5, "replace": False}
 MULTI_SAMPLE_GROUP_PAR = {
-    "s0.1": {"ratio": 0.1, "seed": 78902345, "replace": True},
-    "s0.05": {"ratio": 0.05, "seed": 3242356, "replace": True},
+    "s0.05": {"ratio": 0.05, "seed": 3, "replace": False},
+    "s0.01": {"ratio": 0.01, "seed": 20, "replace": False},
+    # "s0.02r": {"ratio": 0.02, "seed": 217946543, "replace": True},
 }
+
+UD_SAMPLE_GROUP_PAR = {
+    "s0.01": {"ratio": 0.01, "seed": 3242356, "replace": True},
+    "s0.05": {"ratio": 0.05, "seed": 217946543, "replace": False},
+}
+
 
 # Features - Histogram
 FEAT_MAX_BINS = 20
@@ -58,7 +67,7 @@ FEAT_MAX_CBINS = -1
 
 
 # Model-settings
-DEVICE = torch.device('cuda', 0) if torch.cuda.is_available() else 'cpu'
+DEVICE = torch.device('cuda', 1) if torch.cuda.is_available() else 'cpu'
 NUM_THREADS = int(os.environ.get("CPU_NUM_THREADS", os.cpu_count()))
 EPOCHES = 100
 

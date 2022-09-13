@@ -6,48 +6,52 @@ import numpy as np
 import pandas as pd
 from math import ceil
 from utils.log import Log
-from GenDataset.single.dataset.data_feat import Data
+# from GenDataset.single.dataset.data_feat import Data
+from GenDataset.single.dataset.dataset import Table
+from GenDataset.single.dataset.feat import Feature
 from utils.dtype import is_categorical
 from GenDataset.single.workload.workload import query_2_triple
 from GenDataset.single.estimator.estimator import Estimator, OPS
-from constants import SAMPLE_GROUP_PAR, SAMPLE_IRR_COL_RATE, SAMPLE_DIS_COL_RATE, PKL_PROTO, TEMP_ROOT, mkdir
+import constants as C
 
 log = Log(__name__).get_logger()
 
 
 class SamplingGroup(Estimator):
-    def __init__(self, table, join_col=[]):
+    def __init__(self, table: Table):
         random.seed(a=1, version=2)
         super(SamplingGroup, self).__init__(table=table)
         self.name_to_sample_unit = {}
         self.table = table
         self.digital_table = self.table.digitalize()
-        for name, para in SAMPLE_GROUP_PAR.items():
+        space_buget = C.MAX_SAMPLE_SPACE - C.STANDARD_SAMPLE_PAR["ratio"]
+        for name, para in C.SAMPLE_GROUP_PAR.items():
             self.name_to_sample_unit[name] = SampleUnit(table, name, para['ratio'], para['seed'], para['replace'])
+            space_buget = space_buget - para['ratio']
         log.info("All set Sampling Group has been established!")
-        col_names = self.select_irrelevant_col()
+        # col_names = self.select_irrelevant_col()
+        # num = 1
+        # for col_name in col_names:
+        #     name = "ir" + str(num) + col_name[:2]
+        #     num += 1
+        #     self.name_to_sample_unit[name] = self.gen_irr_col_sample_unit(col_name)
+        # log.info("All Irrelevant Col Sampling Group has been established!")
         num = 1
-        for col_name in col_names:
-            name = "ir" + str(num) + col_name[:2]
-            num += 1
-            self.name_to_sample_unit[name] = self.gen_irr_col_sample_unit(col_name)
-        log.info("All Irrelevant Col Sampling Group has been established!")
-        col_names = self.select_distribute_col()
+        dis_col_num = min(int(space_buget / C.SAMPLE_RATIO_DIS), len(self.table.data.columns.values.tolist()))
+        col_names = self.select_distribute_col(dis_col_num)
         for col_name in col_names:
             name = "dt" + str(num) + col_name[:2]
             num += 1
             seed = random.randint(1, 999999999)
-            self.name_to_sample_unit[name] = StratifiedSamplingUnit(table, self.digital_table, col_name, name, seed)
+            self.name_to_sample_unit[name] = StratifiedSamplingUnit(
+                table, self.digital_table, col_name, name, C.SAMPLE_RATIO_DIS, seed)
+            space_buget -= C.SAMPLE_RATIO_DIS
         log.info("All Distribute Col Sampling Group has been established!")
-        for col_name in join_col:
-            name = "hs" + str(num) + col_name[:2]
-            num += 1
-            self.name_to_sample_unit[name] = HashSampleUnit(table, col_name, name, 0.01)
-        log.info("All Hash Col Sampling Group has been established!")
+        log.info(f"Total to-choose-sample-set space buget = {C.MAX_SAMPLE_SPACE - space_buget}")
 
     def select_irrelevant_col(self):
         # Select some irrelevant columns to establish sample on their selection.
-        sel_target_num = ceil(len(self.table.data.columns) * SAMPLE_IRR_COL_RATE)
+        sel_target_num = ceil(len(self.table.data.columns) * C.SAMPLE_IRR_COL_RATE)
         corr = self.digital_table.corr()
         col_names = corr.columns.values.tolist()
         col_name_to_corr = {'col_name': [], 'corr_value': []}
@@ -59,9 +63,8 @@ class SamplingGroup(Estimator):
             :sel_target_num].to_list()
         return selected_col
 
-    def select_distribute_col(self):
+    def select_distribute_col(self, sel_target_num):
         # Select some irrelevant columns to establish sample on their selection.
-        sel_target_num = ceil(len(self.table.data.columns) * SAMPLE_DIS_COL_RATE)
         table_mean = pd.DataFrame(self.digital_table.mean())
         table_std = pd.DataFrame(self.digital_table.std())
         table_cv = table_std / table_mean
@@ -92,16 +95,23 @@ class SamplingGroup(Estimator):
             card_dict[name], dur_dict[name] = unit.query(query)
         return card_dict, dur_dict
 
+    def query2(self, query):
+        card_dict = {}
+        dur_dict = {}
+        for name, unit in self.name_to_sample_unit.items():
+            card_dict[name], dur_dict[name] = unit.query2(query)
+        return card_dict, dur_dict
+
     def like(self, like_str, str_col):
         card_dict = {}
         for name, unit in self.name_to_sample_unit.items():
             card_dict[name] = unit.like(like_str, str_col)
         return card_dict
 
-    def feature(self, total_data_feat):
+    def feature(self, total_df, rel_df):
         feat_dict = {}
         for name, unit in self.name_to_sample_unit.items():
-            feat_dict[name] = unit.feature(total_data_feat)
+            feat_dict[name] = unit.feature(total_df, rel_df)
         return feat_dict
 
     def append_data(self, append_df):
@@ -111,14 +121,14 @@ class SamplingGroup(Estimator):
 
 
 class StratifiedSamplingUnit(object):
-    def __init__(self, table, dtable, column_name, name, seed):
+    def __init__(self, table, dtable, column_name, name, ratio, seed):
         self.id = name
-        self.ratio = 0.02
+        self.ratio = ratio
         self.seed = seed
-        self.replace = True
+        self.replace = False
         self.column_name = column_name
         self.sample_units = []
-        if is_categorical(table.columns[column_name].dtype) and table.columns[column_name].vocab_size <= 20:
+        if is_categorical(table.columns[column_name].dtype) and table.columns[column_name].vocab_size <= 10:
             for i in range(0, table.columns[column_name].vocab_size):
                 small_table = copy.deepcopy(table)
                 small_table.data = table.data[dtable[column_name] == i]
@@ -146,16 +156,53 @@ class StratifiedSamplingUnit(object):
             sample_unit_info = {"unit": sample_unit, "rate": sample_unit_rate}
             self.sample_units.append(sample_unit_info)
         self.row_num = table.row_num
-        self.table = table
+        # self.table = table
+        sample_df_l = []
+        for sample_unit in self.sample_units:
+            sample_df_l.append(sample_unit["unit"].get_sample_df())
+        self.sample = pd.concat(sample_df_l)
+        self.sample_num = len(self.sample)
+
+    # def query(self, query):
+    #     total_card = 0
+    #     total_time = 0
+    #     for sample_unit in self.sample_units:
+    #         s_card, s_time = sample_unit["unit"].query(query)
+    #         total_time += s_time
+    #         total_card += sample_unit["rate"] * s_card
+    #     return total_card, total_time
 
     def query(self, query):
-        total_card = 0
-        total_time = 0
-        for sample_unit in self.sample_units:
-            s_card, s_time = sample_unit["unit"].query(query)
-            total_time += s_time
-            total_card += sample_unit["rate"] * s_card
-        return total_card, total_time
+        columns, operators, values = query_2_triple(query, with_none=False, split_range=False)
+        bitmap = np.ones(self.sample_num, dtype=bool)
+        start_stmp = time.time()
+        for c, o, v in zip(columns, operators, values):
+            bitmap &= OPS[o](self.sample[c], v)
+        if self.sample_num == 0:
+            card = 0
+        else:
+            card = np.round((self.row_num / self.sample_num) * bitmap.sum())
+        dur_ms = (time.time() - start_stmp) * 1e3
+        return card, dur_ms
+
+    def query2(self, query):
+        columns, operators, values = query_2_triple(query, with_none=False, split_range=False)
+        dur = 0
+        bitmap = np.ones(self.sample_num, dtype=bool)
+        df = self.sample
+        for c, o, v in zip(columns, operators, values):
+            dfc = df[c]
+            start_stmp = time.time()
+            bitmap = OPS[o](dfc, v)
+            dur += time.time() - start_stmp
+            df = df[bitmap]
+            bitmap = bitmap[bitmap]
+        if self.sample_num == 0:
+            card = 0
+        else:
+            card = np.round((self.row_num / self.sample_num) * bitmap.sum())
+        dur_ms = dur * 1e3
+        return card, dur_ms
 
     def like(self, like_str, str_col):
         total_card = 0
@@ -164,14 +211,13 @@ class StratifiedSamplingUnit(object):
             total_card += sample_unit["rate"] * s_card
         return total_card
 
-    def feature(self, total_data_feat):
-        sample_df_l = []
-        for sample_unit in self.sample_units:
-            sample_df_l.append(sample_unit["unit"].get_sample_df())
-        sample_total_df = pd.concat(sample_df_l)
-        sample_feature = {'ratio': self.ratio, 'replace': self.replace, 'seed': self.seed, "sample_type": 1}
-        data = Data(sample_total_df, total_data_feat)
-        data_feat = data.feature()
+    def feature(self, total_df, rel_df):
+        sample_feature = {'ratio': self.ratio, 'replace': self.replace,
+                          'seed': self.seed, "sample_type": 1, f"sample_on_{self.column_name}": 1}
+        # data = Data(sample_total_df, total_data_feat)
+        # data_feat = data.feature()
+        feature = Feature(self.sample, rel_df, total_df)
+        data_feat = feature.feature()
         for k, v in data_feat.items():
             sample_feature['sample_' + k] = v
         return sample_feature
@@ -186,12 +232,12 @@ class SampleUnit(object):
         self.ratio = ratio
         self.replace = replace
         self.seed = seed
-        self.table = table
+        # self.table = table
 
     def query(self, query):
         columns, operators, values = query_2_triple(query, with_none=False, split_range=False)
-        start_stmp = time.time()
         bitmap = np.ones(self.sample_num, dtype=bool)
+        start_stmp = time.time()
         for c, o, v in zip(columns, operators, values):
             bitmap &= OPS[o](self.sample[c], v)
         if self.sample_num == 0:
@@ -199,6 +245,25 @@ class SampleUnit(object):
         else:
             card = np.round((self.row_num / self.sample_num) * bitmap.sum())
         dur_ms = (time.time() - start_stmp) * 1e3
+        return card, dur_ms
+
+    def query2(self, query):
+        columns, operators, values = query_2_triple(query, with_none=False, split_range=False)
+        bitmap = np.ones(self.sample_num, dtype=bool)
+        df = self.sample
+        dur = 0
+        for c, o, v in zip(columns, operators, values):
+            dfc = df[c]
+            start_stmp = time.time()
+            bitmap = OPS[o](dfc, v)
+            dur += time.time() - start_stmp
+            df = df[bitmap]
+            bitmap = bitmap[bitmap]
+        if self.sample_num == 0:
+            card = 0
+        else:
+            card = np.round((self.row_num / self.sample_num) * bitmap.sum())
+        dur_ms = dur * 1e3
         return card, dur_ms
 
     def like(self, like_str, str_col):
@@ -209,10 +274,12 @@ class SampleUnit(object):
         card = np.round((self.row_num / self.sample_num) * qualified)
         return card
 
-    def feature(self, total_data_feat):
+    def feature(self, total_df, rel_df):
         sample_feature = {'ratio': self.ratio, 'replace': self.replace, 'seed': self.seed, "sample_type": 0}
-        data = Data(self.sample, total_data_feat)
-        data_feat = data.feature()
+        # data = Data(self.sample, total_data_feat)
+        # data_feat = data.feature()
+        feature = Feature(self.sample, rel_df, total_df)
+        data_feat = feature.feature()
         for k, v in data_feat.items():
             sample_feature['sample_' + k] = v
         return sample_feature
@@ -260,10 +327,12 @@ class IrrSampleUnit(object):
         card = np.round((self.row_num / self.sample_num) * qualified)
         return card
 
-    def feature(self, total_data_feat):
+    def feature(self, total_df, rel_df):
         sample_feature = {'ratio': self.ratio, 'replace': self.replace, 'seed': self.seed, "sample_type": 3}
-        data = Data(self.sample, total_data_feat)
-        data_feat = data.feature()
+        # data = Data(self.sample, total_data_feat)
+        # data_feat = data.feature()
+        feature = Feature(self.sample, rel_df, total_df)
+        data_feat = feature.feature()
         for k, v in data_feat.items():
             sample_feature['sample_' + k] = v
         return sample_feature
@@ -305,10 +374,12 @@ class HashSampleUnit(object):
         card = np.round((self.row_num / self.sample_num) * qualified)
         return card
 
-    def feature(self, total_data_feat):
+    def feature(self, total_df, rel_df):
         sample_feature = {'ratio': self.ratio, 'replace': self.replace, 'seed': self.seed, "sample_type": 2}
-        data = Data(self.sample, total_data_feat)
-        data_feat = data.feature()
+        # data = Data(self.sample, total_data_feat)
+        # data_feat = data.feature()
+        feature = Feature(self.sample, rel_df, total_df)
+        data_feat = feature.feature()
         for k, v in data_feat.items():
             sample_feature['sample_' + k] = v
         return sample_feature
@@ -318,8 +389,8 @@ class HashSampleUnit(object):
 
 
 def load_sample_group(table, dataset_name):
-    sample_group_path = TEMP_ROOT / "sample_group"
-    mkdir(sample_group_path)
+    sample_group_path = C.TEMP_ROOT / "sample_group"
+    C.mkdir(sample_group_path)
     sample_group_path = sample_group_path / f"{dataset_name}-sg.pkl"
     if sample_group_path.is_file():
         log.info("sample group exists, load...")
@@ -330,13 +401,13 @@ def load_sample_group(table, dataset_name):
     else:
         sample_group = SamplingGroup(table)
         with open(sample_group_path, 'wb') as f:
-            pickle.dump(sample_group, f, protocol=PKL_PROTO)
+            pickle.dump(sample_group, f, protocol=C.PKL_PROTO)
         return sample_group
 
 
-def load_sample_feature(sg: SamplingGroup, dataset_name: str, total_data):
-    sample_group_path = TEMP_ROOT / "sample_group"
-    mkdir(sample_group_path)
+def load_sample_feature(sg: SamplingGroup, dataset_name: str, total_df, rel_df):
+    sample_group_path = C.TEMP_ROOT / "sample_group"
+    C.mkdir(sample_group_path)
     sample_feature_path = sample_group_path / f"{dataset_name}-sf.pkl"
     if sample_feature_path.is_file():
         log.info("sample features exists, load...")
@@ -345,7 +416,51 @@ def load_sample_feature(sg: SamplingGroup, dataset_name: str, total_data):
         log.info("load finished.")
         return sample_feat
     else:
-        sample_feat = sg.feature(total_data)
+        sample_feat = sg.feature(total_df, rel_df)
         with open(sample_feature_path, 'wb') as f:
-            pickle.dump(sample_feat, f, protocol=PKL_PROTO)
+            pickle.dump(sample_feat, f, protocol=C.PKL_PROTO)
         return sample_feat
+
+
+class SamplingGroupUpdate(Estimator):
+    def __init__(self, table: Table):
+        random.seed(a=1, version=2)
+        super(SamplingGroupUpdate, self).__init__(table=table)
+        self.name_to_sample_unit = {}
+        self.table = table
+        self.digital_table = self.table.digitalize()
+        for name, para in C.UD_SAMPLE_GROUP_PAR.items():
+            self.name_to_sample_unit[name] = SampleUnit(table, name, para['ratio'], para['seed'], para['replace'])
+        log.info("All set Sampling Group has been established!")
+
+    def query(self, query):
+        card_dict = {}
+        dur_dict = {}
+        for name, unit in self.name_to_sample_unit.items():
+            card_dict[name], dur_dict[name] = unit.query(query)
+        return card_dict, dur_dict
+
+    def query2(self, query):
+        card_dict = {}
+        dur_dict = {}
+        for name, unit in self.name_to_sample_unit.items():
+            card_dict[name], dur_dict[name] = unit.query2(query)
+        return card_dict, dur_dict
+
+    def like(self, like_str, str_col):
+        card_dict = {}
+        for name, unit in self.name_to_sample_unit.items():
+            card_dict[name] = unit.like(like_str, str_col)
+        return card_dict
+
+    def feature(self, total_df, rel_df):
+        feat_dict = {}
+        for name, unit in self.name_to_sample_unit.items():
+            feat_dict[name] = unit.feature(total_df, rel_df)
+        return feat_dict
+
+    def append_data(self, append_df):
+        self.append_df = append_df
+        for name, sample_unit in self.name_to_sample_unit.items():
+            sample_unit.append_data(append_df)
+        return self

@@ -2,10 +2,10 @@ from collections import OrderedDict
 from typing import Dict, NamedTuple, Optional, Tuple, List, Any
 import pickle
 import numpy as np
+from GenDataset.single.dataset.feat import Histogram, list_to_str
 
 from utils.dtype import is_categorical
 from constants import WORKLOAD_ROOT, PKL_PROTO, mkdir
-from GenDataset.single.dataset.data_feat import Data, list_to_str
 from GenDataset.single.dataset.dataset import Table
 
 
@@ -208,40 +208,41 @@ def get_frac(op, total, part):
         return 0
 
 
-def query_2_histogram_vec(query: Query, data: Data):
+def query_2_histogram_vec(query: Query, histo: Histogram):
     vec = {}
     for col, pred in query.predicates.items():
         # this column is cate
-        if is_categorical(data.columns[col].type):
-            for cate in data.columns[col].bins:
+        if is_categorical(histo.col_2_type[col]):
+            for cate in histo.col_2_histo_bin[col]:
                 vec["query_" + col + "_" + list_to_str(cate)] = 0
             if pred is None:
                 pass
             else:
                 op, val = pred
-                for cate in data.columns[col].bins:
+                val = histo.col_2_vocab[col][val]
+                for cate in histo.col_2_histo_bin[col]:
                     for name in cate:
                         if name == val:
                             vec["query_" + col + "_" + list_to_str(cate)] = 1 / len(cate)
                             break
         else:
-            for cate in data.columns[col].bins:
+            for cate in histo.col_2_histo_bin[col]:
                 vec["query_" + col + "_" + list_to_str(cate)] = 0
             if pred is None:
                 pass
             else:
                 op, val = pred
                 if op == '[]':
-                    for cate in data.columns[col].bins:
+                    for cate in histo.col_2_histo_bin[col]:
                         vec["query_" + col + "_" + list_to_str(cate)] = get_frac(op, val, cate)
                 elif op == '>=':
-                    for cate in data.columns[col].bins:
+                    for cate in histo.col_2_histo_bin[col]:
                         vec["query_" + col + "_" + list_to_str(cate)] = get_frac(op, val, cate)
                 elif op == '<=':
-                    for cate in data.columns[col].bins:
+                    for cate in histo.col_2_histo_bin[col]:
                         vec["query_" + col + "_" + list_to_str(cate)] = get_frac(op, val, cate)
                 elif op == '=':
-                    for cate in data.columns[col].bins:
+                    for cate in histo.col_2_histo_bin[col]:
                         vec["query_" + col + "_" + list_to_str(cate)] = get_frac(op, val, cate)
     return vec
 

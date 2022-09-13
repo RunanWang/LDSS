@@ -7,7 +7,6 @@ import pandas as pd
 
 from constants import TEMP_ROOT, PKL_PROTO
 from utils.log import Log
-from GenDataset.multi.dataset.data import Data
 
 L = Log(__name__).get_logger()
 
@@ -22,7 +21,6 @@ class Database(object):
         for t in table_list:
             L.info(f"Loading table {t}")
             self.table[t] = load_table(t, data_root)
-            self.data[t] = load_data(t, self)
         self.join_col = join_col
 
 
@@ -111,25 +109,6 @@ def load_table(table_name: str, data_root: str, overwrite: bool = False) -> Tabl
         with open(table_path, 'wb') as f:
             pickle.dump(table, f, protocol=PKL_PROTO)
         return table
-
-
-def load_data(table_name: str, database: Database, overwrite: bool = False) -> Data:
-    obj_path = TEMP_ROOT / "obj"
-    if not obj_path.exists():
-        obj_path.mkdir()
-    table_path = obj_path / f"{table_name}.data.pkl"
-    if not overwrite and table_path.is_file():
-        L.info("data exists, load...")
-        with open(table_path, 'rb') as f:
-            data = pickle.load(f)
-        L.info(f"load data finished: {table_name}")
-        return data
-    else:
-        data = Data(database.table[table_name].data)
-        L.info("write data to disk...")
-        with open(table_path, 'wb') as f:
-            pickle.dump(data, f, protocol=PKL_PROTO)
-        return data
 
 
 def csv_to_pkl(data_root: str, table_name: str):

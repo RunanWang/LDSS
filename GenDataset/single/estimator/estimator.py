@@ -54,6 +54,19 @@ class Oracle(Estimator):
         dur_ms = (time.time() - start_stmp) * 1e3
         return card, dur_ms
 
+    def query2(self, query):
+        columns, operators, values = query_2_triple(query, with_none=False, split_range=False)
+        start_stmp = time.time()
+        bitmap = np.ones(self.table.row_num, dtype=bool)
+        df = self.table.data
+        for c, o, v in zip(columns, operators, values):
+            bitmap = OPS[o](df[c], v)
+            df = df[bitmap]
+            bitmap = bitmap[bitmap]
+        card = bitmap.sum()
+        dur_ms = (time.time() - start_stmp) * 1e3
+        return card, dur_ms
+
     def like(self, like_str, str_col):
         qualified = 0
         for index, row in self.table.data.iterrows():

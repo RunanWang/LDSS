@@ -25,5 +25,12 @@ def generate_labels_for_queries(table: Table, queryset: Dict[str, List[Query]]) 
 
 def generate_label_for_query(table: Table, query: Query):
     oracle = Oracle(table)
-    card, _ = oracle.query(query)
+    card, _ = oracle.query2(query)
     return card
+
+
+def generate_label_by_standard_sample(std_q_error, sample_q_error):
+    if sample_q_error <= std_q_error:
+        return 1
+    else:
+        return 0
