@@ -76,3 +76,19 @@ New Dataset should contain a TABLE_COL schema.
 For Multi-table, dataset should contain a JOIN_COL schema.
 
 All schemas can be found at constants.py
+
+# Cite
+
+```bibtex
+    @article{LDSS,
+        title = {Cardinality estimation via learned dynamic sample selection},
+        journal = {Information Systems},
+        volume = {117},
+        pages = {102252},
+        year = {2023},
+        issn = {0306-4379},
+        doi = {https://doi.org/10.1016/j.is.2023.102252},
+        url = {https://www.sciencedirect.com/science/article/pii/S0306437923000881},
+        author = {Run-An Wang and Zhaonian Zou and Ziqi Jing}
+    }
+```
